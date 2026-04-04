@@ -1,4 +1,4 @@
-import { ArrowDown, Loader2, SendHorizontal, Sparkles, Wrench, CheckCircle2, List, Lightbulb } from "lucide-react"
+import { ArrowDown, Loader2, SendHorizontal, Sparkles, List, Lightbulb } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,6 @@ const WELCOME =
 type EnhancedChatMessage = ChatMessage & {
   keyPoints?: string[]
   suggestions?: string[]
-  toolCalls?: Array<{ tool: string; status: "running" | "completed" }>
   isStreaming?: boolean
 }
 
@@ -25,7 +24,6 @@ export function CareerChat() {
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [currentStreamingMessage, setCurrentStreamingMessage] = useState<EnhancedChatMessage | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
 
@@ -82,16 +80,13 @@ export function CareerChat() {
     let assistantContent = ""
     let assistantKeyPoints: string[] = []
     let assistantSuggestions: string[] = []
-    let toolCalls: Array<{ tool: string; status: "running" | "completed" }> = []
     
     // 添加一个临时的 assistant 消息
-    const tempAssistantId = Date.now()
     setMessages(prev => [...prev, { 
       role: "assistant", 
       content: "", 
       keyPoints: [], 
       suggestions: [],
-      toolCalls: [],
       isStreaming: true 
     }])
     
@@ -119,40 +114,7 @@ export function CareerChat() {
               })
             }
             break
-            
-          case "tool_start":
-            // 工具调用开始
-            if (event.tool) {
-              toolCalls.push({ tool: event.tool, status: "running" })
-              setMessages(prev => {
-                const copy = [...prev]
-                const last = copy[copy.length - 1]
-                if (last?.role === "assistant") {
-                  copy[copy.length - 1] = { ...last, toolCalls: [...toolCalls] }
-                }
-                return copy
-              })
-            }
-            break
-            
-          case "tool_end":
-            // 工具调用结束
-            if (event.tool && toolCalls.length > 0) {
-              const lastTool = toolCalls[toolCalls.length - 1]
-              if (lastTool.tool === event.tool) {
-                lastTool.status = "completed"
-              }
-              setMessages(prev => {
-                const copy = [...prev]
-                const last = copy[copy.length - 1]
-                if (last?.role === "assistant") {
-                  copy[copy.length - 1] = { ...last, toolCalls: [...toolCalls] }
-                }
-                return copy
-              })
-            }
-            break
-            
+             
           case "reply":
             // 最终回复
             if (event.content) {
@@ -181,14 +143,12 @@ export function CareerChat() {
                   content: assistantContent || "抱歉，我没有理解你的问题，请再详细说明一下。",
                   keyPoints: assistantKeyPoints,
                   suggestions: assistantSuggestions,
-                  toolCalls: toolCalls,
                   isStreaming: false
                 }
               }
               return copy
             })
             setStreaming(false)
-            setCurrentStreamingMessage(null)
             break
         }
       })
@@ -221,25 +181,6 @@ export function CareerChat() {
       <div>
         {/* 主要内容 */}
         <div className="whitespace-pre-wrap">{message.content || (message.isStreaming ? "…" : "")}</div>
-        
-        {/* 工具调用状态 */}
-        {message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mt-2 space-y-1">
-            {message.toolCalls.map((call, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
-                {call.status === "running" ? (
-                  <Loader2 className="size-3 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="size-3 text-green-500" />
-                )}
-                <Wrench className="size-3" />
-                <span>
-                  {call.status === "running" ? `正在查询${call.tool}...` : `已查询${call.tool}`}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
         
         {/* 关键要点 */}
         {message.keyPoints && message.keyPoints.length > 0 && (
@@ -319,7 +260,7 @@ export function CareerChat() {
                       : "mr-auto border border-border bg-muted/60 text-foreground"
                   )}
                 >
-                  {m.role === "assistant" ? renderMessageContent(m) : m.content}
+                  {m.role === 'assistant' ? renderMessageContent(m) : m.content}
                 </div>
               ))}
               

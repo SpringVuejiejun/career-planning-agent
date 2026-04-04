@@ -8,15 +8,12 @@ export type ChatMessage = {
 
 // 结构化响应类型
 export type StructuredChunk = {
-  type: "streaming" | "reply" | "ask" | "tool_start" | "tool_end" | "error" | "end"
+  type: "streaming" | "reply" | "error" | "end"
   content?: string
-  text?: string  // 兼容旧格式
   key_points?: string[]
   suggestions?: string[]
   data?: Record<string, any>
   is_final?: boolean
-  tool?: string
-  result?: any
 }
 
 // 解析 SSE 行，返回结构化对象
@@ -33,7 +30,7 @@ function parseSseLine(line: string): StructuredChunk | null {
   }
 }
 
-// 新的流式函数，支持结构化数据
+// 流式输出函数，支持结构化数据
 export async function streamCareerChatStructured(
   messages: ChatMessage[],
   onEvent: (event: StructuredChunk) => void
@@ -70,19 +67,4 @@ export async function streamCareerChatStructured(
       }
     }
   }
-}
-
-// 兼容旧版本的函数（如果你不想改所有调用处）
-export async function streamCareerChat(
-  messages: ChatMessage[],
-  onDelta: (chunk: string) => void
-): Promise<void> {
-  return streamCareerChatStructured(messages, (event) => {
-    // 提取文本内容用于旧的回调
-    if (event.type === "streaming" && event.content) {
-      onDelta(event.content)
-    } else if (event.type === "reply" && event.content) {
-      onDelta(event.content)
-    }
-  })
 }
