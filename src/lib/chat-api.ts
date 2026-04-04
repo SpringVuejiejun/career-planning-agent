@@ -1,3 +1,4 @@
+// types.ts
 export type ChatRole = "user" | "assistant"
 
 export type ChatMessage = {
@@ -5,22 +6,37 @@ export type ChatMessage = {
   content: string
 }
 
-function parseSseLine(line: string): string | null {
+// 结构化响应类型
+export type StructuredChunk = {
+  type: "streaming" | "reply" | "ask" | "tool_start" | "tool_end" | "error" | "end"
+  content?: string
+  text?: string  // 兼容旧格式
+  key_points?: string[]
+  suggestions?: string[]
+  data?: Record<string, any>
+  is_final?: boolean
+  tool?: string
+  result?: any
+}
+
+// 解析 SSE 行，返回结构化对象
+function parseSseLine(line: string): StructuredChunk | null {
   if (!line.startsWith("data: ")) return null
   const data = line.slice(6).trim()
-  if (data === "[DONE]") return ""
+  if (data === "[DONE]") return { type: "end", is_final: true }
+  
   try {
-    const j = JSON.parse(data) as { text?: string }
-    return j.text ?? null
+    const parsed = JSON.parse(data) as StructuredChunk
+    return parsed
   } catch {
     return null
   }
 }
 
-/** Stream assistant reply; calls onDelta for each token; resolves when stream ends. */
-export async function streamCareerChat(
+// 新的流式函数，支持结构化数据
+export async function streamCareerChatStructured(
   messages: ChatMessage[],
-  onDelta: (chunk: string) => void
+  onEvent: (event: StructuredChunk) => void
 ): Promise<void> {
   const res = await fetch("/api/chat/stream", {
     method: "POST",
@@ -47,9 +63,26 @@ export async function streamCareerChat(
     buffer = lines.pop() ?? ""
     for (const line of lines) {
       if (!line.trim()) continue
-      const piece = parseSseLine(line)
-      if (piece === "") return
-      if (piece) onDelta(piece)
+      const event = parseSseLine(line)
+      if (event) {
+        onEvent(event)
+        if (event.type === "end") return
+      }
     }
   }
+}
+
+// 兼容旧版本的函数（如果你不想改所有调用处）
+export async function streamCareerChat(
+  messages: ChatMessage[],
+  onDelta: (chunk: string) => void
+): Promise<void> {
+  return streamCareerChatStructured(messages, (event) => {
+    // 提取文本内容用于旧的回调
+    if (event.type === "streaming" && event.content) {
+      onDelta(event.content)
+    } else if (event.type === "reply" && event.content) {
+      onDelta(event.content)
+    }
+  })
 }
