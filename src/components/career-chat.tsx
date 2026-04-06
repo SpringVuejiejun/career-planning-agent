@@ -1,11 +1,13 @@
-import { ArrowDown, Loader2, SendHorizontal, Sparkles, List, Lightbulb } from "lucide-react"
+import { ArrowDown, Loader2, SendHorizontal, Sparkles, List, Lightbulb, Square, Plus } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { Tooltip } from 'react-tooltip'
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { type ChatMessage, streamCareerChatStructured, type StructuredChunk } from "@/lib/chat-api"
 import { cn } from "@/lib/utils"
+import { useChatStore } from "@/stores/chatStore"
 
 const WELCOME =
   "你好，我是你的职业规划助手。可以告诉我你的专业、年级，以及最近在实习、考研、就业之间的纠结吗？"
@@ -18,9 +20,34 @@ type EnhancedChatMessage = ChatMessage & {
 }
 
 export function CareerChat() {
-  const [messages, setMessages] = useState<EnhancedChatMessage[]>([
-    { role: "assistant", content: WELCOME, keyPoints: [], suggestions: [] },
-  ])
+  const { messages: storeMsg, updateMessages, clearMessages } = useChatStore()
+  const [messages, setMessages] = useState(storeMsg)
+
+  useEffect(() => {
+    if(messages.length > 0 && JSON.stringify(messages) !== JSON.stringify(storeMsg)){
+      updateMessages(messages)
+    }
+  }, [messages])
+
+  // useEffect(() => {
+  //   if(JSON.stringify(messages) !== JSON.stringify(storeMsg)) setMessages(storeMsg)
+  // }, [storeMsg])
+
+  useEffect(() => {
+    if(messages.length === 0 && storeMsg.length === 0){
+      const welcome = [{ role: 'assistant', content: WELCOME, keyPoints: [], suggestions: []}]
+      setMessages(welcome)
+    }
+  }, [messages.length, storeMsg.length])
+
+  const newChat = () => {
+    clearMessages()
+    setMessages([])
+  }
+
+
+  // 更新为历史记录
+  // setMessages(storeMsg)
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +89,14 @@ export function CareerChat() {
   useEffect(() => {
     scrollToBottom("auto")
   }, [scrollToBottom])
-
+  const abortControllerRef = useRef(null)
+  const stopStreaming = () => {
+    if (abortControllerRef.current) {
+    abortControllerRef.current.abort();  // 中断请求
+    abortControllerRef.current = null;
+    setStreaming(false);
+  }
+  }
   const send = useCallback(async () => {
     const text = input.trim()
     if (!text || streaming) return
@@ -70,11 +104,15 @@ export function CareerChat() {
     setError(null)
     
     shouldAutoScrollRef.current = true
+
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+    setStreaming(true)
+
     
     // 添加用户消息
     const userMessage: EnhancedChatMessage = { role: "user", content: text }
     setMessages(prev => [...prev, userMessage])
-    setStreaming(true)
     
     // 准备临时消息
     let assistantContent = ""
@@ -91,7 +129,8 @@ export function CareerChat() {
     }])
     
     // 构建历史消息（包含刚添加的用户消息）
-    const historyMessages: ChatMessage[] = [...messages, userMessage]
+    const scartchpadMessages: ChatMessage[] = [...messages, userMessage]
+    const historyMessages: ChatMessage[] = scartchpadMessages.length > 10 ? scartchpadMessages.slice(-10) : scartchpadMessages 
     
     try {
       await streamCareerChatStructured(historyMessages, (event: StructuredChunk) => {
@@ -151,9 +190,10 @@ export function CareerChat() {
             setStreaming(false)
             break
         }
-      })
+      }, abortController.signal)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "发送失败"
+      // const msg = e instanceof Error ? e.message : "发送失败"
+      const msg = e instanceof Error && e.name === 'AbortError' ? '用户主动中断' : '发送失败'
       setError(msg)
       setMessages(prev => {
         const copy = [...prev]
@@ -228,8 +268,17 @@ export function CareerChat() {
             <CardTitle className="text-lg">大学生职业规划智能体</CardTitle>
           </div>
           <CardDescription>
-            基于 LangChain 与对话模型，辅助你理清方向、制定下一步行动。支持查询就业数据、技能要求、招聘信息等。
+            基于 LangChain 与对话模型，辅助你理清方向、制定下一步行动。支持查询就业数据、技能要求、招聘信息等。 
           </CardDescription>
+          <Button 
+            type="button"
+            size="icon"
+            data-tooltip-id="data-newChat"
+            data-tooltip-content="开启新对话"
+            className="absolute right-2 top-10"
+            onClick={newChat}
+          ><Plus/></Button>
+          <Tooltip id="data-newChat" place="top"></Tooltip>
         </CardHeader>
         
         <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
@@ -305,18 +354,23 @@ export function CareerChat() {
                 placeholder="描述你的情况或问题，Enter 发送，Shift+Enter 换行。例如：'计算机专业在北京就业怎么样？'"
                 disabled={streaming}
                 maxRows={5}
-                className="min-h-[60px] bg-background/80 pr-24 resize-none"
+                className="min-h-[60px] pr-24 resize-none"
                 aria-label="消息输入"
               />
+              {/* <Tooltip id="chat-tooltip" place="right" /> */}
               <Button
                 type="button"
-                onClick={() => void send()}
-                disabled={streaming || !input.trim()}
+                data-tooltip-id="chat-tooltip"
+                data-tooltip-content={streaming ? "停止生成" : "发送消息"}
+                onClick={streaming ? stopStreaming : send}
+                disabled={streaming ? false : !input.trim()}
                 size="icon"
-                className="absolute bottom-2 right-2 h-8 w-8"
+                className="absolute bottom-2 right-2 h-8 w-8 cursor-pointer"
+                // title={streaming ? '停止生成' : '请输入你的问题'}
               >
                 {streaming ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <Square className="size-4 animate-spin"></Square>
+                  // <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <SendHorizontal className="size-4" />
                 )}

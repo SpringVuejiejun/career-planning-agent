@@ -33,12 +33,14 @@ function parseSseLine(line: string): StructuredChunk | null {
 // 流式输出函数，支持结构化数据
 export async function streamCareerChatStructured(
   messages: ChatMessage[],
-  onEvent: (event: StructuredChunk) => void
+  onEvent: (event: StructuredChunk) => void,
+  signal
 ): Promise<void> {
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
+    signal
   })
 
   if (!res.ok) {
