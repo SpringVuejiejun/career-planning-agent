@@ -1,3 +1,4 @@
+// types.ts
 export type ChatRole = "user" | "assistant"
 
 export type ChatMessage = {
@@ -5,27 +6,41 @@ export type ChatMessage = {
   content: string
 }
 
-function parseSseLine(line: string): string | null {
+// 结构化响应类型
+export type StructuredChunk = {
+  type: "streaming" | "reply" | "error" | "end"
+  content?: string
+  key_points?: string[]
+  suggestions?: string[]
+  data?: Record<string, any>
+  is_final?: boolean
+}
+
+// 解析 SSE 行，返回结构化对象
+function parseSseLine(line: string): StructuredChunk | null {
   if (!line.startsWith("data: ")) return null
   const data = line.slice(6).trim()
-  if (data === "[DONE]") return ""
+  if (data === "[DONE]") return { type: "end", is_final: true }
+  
   try {
-    const j = JSON.parse(data) as { text?: string }
-    return j.text ?? null
+    const parsed = JSON.parse(data) as StructuredChunk
+    return parsed
   } catch {
     return null
   }
 }
 
-/** Stream assistant reply; calls onDelta for each token; resolves when stream ends. */
-export async function streamCareerChat(
+// 流式输出函数，支持结构化数据
+export async function streamCareerChatStructured(
   messages: ChatMessage[],
-  onDelta: (chunk: string) => void
+  onEvent: (event: StructuredChunk) => void,
+  signal
 ): Promise<void> {
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
+    signal
   })
 
   if (!res.ok) {
@@ -47,9 +62,11 @@ export async function streamCareerChat(
     buffer = lines.pop() ?? ""
     for (const line of lines) {
       if (!line.trim()) continue
-      const piece = parseSseLine(line)
-      if (piece === "") return
-      if (piece) onDelta(piece)
+      const event = parseSseLine(line)
+      if (event) {
+        onEvent(event)
+        if (event.type === "end") return
+      }
     }
   }
 }
