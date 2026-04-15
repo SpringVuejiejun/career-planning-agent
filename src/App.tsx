@@ -1,23 +1,25 @@
-import { CareerChat } from "@/components/career-chat"
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import LoginPage from '@/components/login'
-import useAuth from '@/hooks/useAuth'
+import { CareerChat } from '@/components/career-chat';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from '@/components/login';
+import useAuth from '@/hooks/useAuth';
+import Layout from '@/components/Layout';
 
 // 路由守卫
-const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return <div>加载中...</div>;
   }
-  
+
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to='/login' replace />;
   }
-  
+
   return <>{children}</>;
 };
-
 
 function App() {
   return (
@@ -28,16 +30,15 @@ function App() {
           path='/'
           element={
             <PrivateRoute>
-              <CareerChat />
-            </PrivateRoute>    
-          } />
+              <Layout>
+                <CareerChat />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
-
-      // <div className="flex flex-col h-screen">
-      //   <CareerChat />
-      // </div>
+export default App;
