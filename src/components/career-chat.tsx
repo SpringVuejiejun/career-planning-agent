@@ -260,7 +260,7 @@ export function CareerChat() {
   }
 
   return (
-    <div className="mt-2 flex h-[95vh] flex-col">
+    <div className="mt-2 flex h-[95vh] flex-col max-w-[50rem] mx-auto" >
       <Card className="flex h-full flex-col border-border/80 bg-card/80 backdrop-blur-sm">
         <CardHeader className="border-b border-border/60 pb-4 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -268,7 +268,7 @@ export function CareerChat() {
             <CardTitle className="text-lg">大学生职业规划智能体</CardTitle>
           </div>
           <CardDescription>
-            基于 LangChain 与对话模型，辅助你理清方向、制定下一步行动。支持查询就业数据、技能要求、招聘信息等。 
+            专注于职业规划，辅助你理清方向、制定下一步行动。支持查询就业数据、技能要求、招聘信息等。 
           </CardDescription>
           <Button 
             type="button"

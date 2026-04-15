@@ -58,10 +58,9 @@
 }
 
 #root {
-  width: 1126px;
-  max-width: 50rem;
+  width: 100vw;
   margin: 0 auto;
-  border-inline: 1px solid var(--border);
+  /* border-inline: 1px solid var(--border); */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
