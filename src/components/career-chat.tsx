@@ -21,6 +21,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   type ChatMessage,
+  getConversationMessages,
+  type HistoryMessage,
   streamCareerChatStructured,
   type StructuredChunk,
 } from '@/lib/chat-api';
@@ -48,23 +50,64 @@ const toStoredMessages = (
   }));
 
 export function CareerChat() {
-  const { sessions, activeSessionId, updateActiveMessages, createSession } =
-    useChatStore();
+  const {
+    sessions,
+    activeSessionId,
+    updateActiveMessages,
+    createSession,
+    loadConversations,
+    loaded,
+    hydrateSessionMessages,
+    upsertConversation,
+  } = useChatStore();
   const activeSession =
     sessions.find((session) => session.id === activeSessionId) ?? null;
   const [messages, setMessages] = useState<EnhancedChatMessage[]>(
     activeSession?.messages ?? []
   );
 
+  const historyLoadedRef = useRef<Record<number, boolean>>({});
+
   useEffect(() => {
-    if (!activeSessionId || sessions.length === 0) {
-      createSession();
+    if (!loaded) {
+      void loadConversations();
     }
-  }, [activeSessionId, createSession, sessions.length]);
+  }, [loaded, loadConversations]);
+
+  useEffect(() => {
+    if (loaded && !activeSessionId && sessions.length === 0) {
+      void createSession();
+    }
+  }, [activeSessionId, createSession, loaded, sessions.length]);
 
   useEffect(() => {
     setMessages(activeSession?.messages ?? []);
   }, [activeSessionId]);
+
+  useEffect(() => {
+    const conversationId = activeSession?.id;
+    if (!conversationId) return;
+    if (historyLoadedRef.current[conversationId]) return;
+
+    const loadHistory = async () => {
+      try {
+        const rows = await getConversationMessages(conversationId);
+        const mapped: StoredChatMessage[] = rows.map((row: HistoryMessage) => ({
+          role: row.role,
+          content: row.content,
+          keyPoints: row.key_points,
+          suggestions: row.suggestions,
+        }));
+        historyLoadedRef.current[conversationId] = true;
+        hydrateSessionMessages(conversationId, mapped);
+        setMessages(mapped);
+      } catch {
+        // 忽略历史加载失败，保留当前UI可用
+      }
+    };
+
+    void loadHistory();
+  }, [activeSession?.id, hydrateSessionMessages]);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -79,7 +122,7 @@ export function CareerChat() {
   useEffect(() => {
     if (!activeSession || messages.length > 0) return;
     if (activeSession.messages.length === 0) {
-      const welcome = [
+      const welcome: EnhancedChatMessage[] = [
         { role: 'assistant', content: WELCOME, keyPoints: [], suggestions: [] },
       ];
       setMessages(welcome);
@@ -145,7 +188,8 @@ export function CareerChat() {
       setStreaming(false);
     }
   };
-  const send = useCallback(async () => {
+
+  const send = async () => {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
@@ -185,9 +229,18 @@ export function CareerChat() {
         ? scartchpadMessages.slice(-10)
         : scartchpadMessages;
 
+    let effectiveConversationId = activeSessionId;
+    if (!effectiveConversationId) {
+      effectiveConversationId = await createSession(text.slice(0, 20));
+      if (!effectiveConversationId) {
+        throw new Error('创建会话失败');
+      }
+    }
+
     try {
       await streamCareerChatStructured(
         historyMessages,
+        effectiveConversationId,
         (event: StructuredChunk) => {
           switch (event.type) {
             case 'streaming':
@@ -219,6 +272,16 @@ export function CareerChat() {
               }
               if (event.suggestions) {
                 assistantSuggestions = event.suggestions;
+              }
+              if (event.conversation_id) {
+                const now = Date.now();
+                upsertConversation({
+                  id: event.conversation_id,
+                  title: text.slice(0, 20) || '新对话',
+                  messages: [],
+                  createdAt: now,
+                  updatedAt: now,
+                });
               }
               break;
 
@@ -269,7 +332,7 @@ export function CareerChat() {
       });
       setStreaming(false);
     }
-  }, [input, messages, streaming]);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

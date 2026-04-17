@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/sidebar';
 import { MessageSquare, Plus, Clock, Pin, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 
 export function AppSidebar() {
@@ -24,7 +24,16 @@ export function AppSidebar() {
     createSession,
     setActiveSession,
     deleteSession,
+    loadConversations,
+    loaded,
+    pinnedSession,
   } = useChatStore();
+
+  useEffect(() => {
+    if (!loaded) {
+      void loadConversations();
+    }
+  }, [loaded, loadConversations]);
 
   const sessionHistory = useMemo(
     () =>
@@ -47,14 +56,18 @@ export function AppSidebar() {
   const pinnedChats = sessionHistory.filter((chat) => chat.isPinned);
   const recentChats = sessionHistory.filter((chat) => !chat.isPinned);
 
-  const handleNewChat = () => {
-    // if (sessions.length === 1) return;
-    createSession();
+  const handleNewChat = async () => {
+    await createSession();
   };
 
-  const handleDeleteChat = (id: string, e: React.MouseEvent) => {
+  const handleDeleteChat = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteSession(id);
+    await deleteSession(id);
+  };
+
+  const handlePinned = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await pinnedSession(id);
   };
 
   return (
@@ -64,7 +77,7 @@ export function AppSidebar() {
         <div className='flex items-center gap-2 group-data-[collapsible=icon]:justify-center place-content-between'>
           <SidebarTrigger className='shrink-0 cursor-pointer' />
           <Button
-            onClick={handleNewChat}
+            onClick={() => void handleNewChat()}
             className='w-auto justify-end gap-2 group-data-[collapsible=icon]:hidden'
             variant='default'
             size='sm'
@@ -93,7 +106,7 @@ export function AppSidebar() {
                       size='lg'
                       isActive={activeSessionId === chat.id}
                       onClick={() => setActiveSession(chat.id)}
-                      className='group h-auto min-h-14 w-full items-start justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
+                      className='group h-auto min-h-14 w-[90%] items-start justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
                     >
                       <div className='flex min-w-0 items-start gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>
                         <MessageSquare className='h-4 w-4 shrink-0' />
@@ -106,16 +119,24 @@ export function AppSidebar() {
                           </div>
                         </div>
                       </div>
-                      <div className='ml-2 flex shrink-0 items-center gap-1 self-center group-data-[collapsible=icon]:hidden'>
+                      <div className='ml-2 pr-6 flex shrink-0 items-center gap-1 self-center group-data-[collapsible=icon]:hidden'>
                         <span className='text-xs text-muted-foreground'>
                           {chat.timestamp}
                         </span>
                       </div>
                     </SidebarMenuButton>
                     <SidebarMenuAction
+                      aria-label='置顶'
+                      onClick={(e) => void handlePinned(chat.id, e)}
+                      className='!top-1/2 !-translate-y-1/2 mr-5'
+                    >
+                      <Pin className='mr-1 h-3 w-3' />
+                    </SidebarMenuAction>
+                    <SidebarMenuAction
                       showOnHover
                       aria-label='删除会话'
-                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                      onClick={(e) => void handleDeleteChat(chat.id, e)}
+                      className='!top-1/2 !-translate-y-1/2'
                     >
                       <Trash2 className='h-3 w-3' />
                     </SidebarMenuAction>
@@ -142,7 +163,7 @@ export function AppSidebar() {
                       size='lg'
                       isActive={activeSessionId === chat.id}
                       onClick={() => setActiveSession(chat.id)}
-                      className='group h-auto min-h-14 w-full items-start justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
+                      className='group h-auto min-h-14 w-[90%] items-start justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
                     >
                       <div className='flex min-w-0 items-start gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>
                         <MessageSquare className='h-4 w-4 shrink-0' />
@@ -162,9 +183,16 @@ export function AppSidebar() {
                       </div>
                     </SidebarMenuButton>
                     <SidebarMenuAction
+                      aria-label='置顶'
+                      onClick={(e) => void handlePinned(chat.id, e)}
+                      className='!top-1/2 !-translate-y-1/2 mr-5'
+                    >
+                      <Pin className='mr-1 h-3 w-3' />
+                    </SidebarMenuAction>
+                    <SidebarMenuAction
                       showOnHover
                       aria-label='删除会话'
-                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                      onClick={(e) => void handleDeleteChat(chat.id, e)}
                       className='!top-1/2 !-translate-y-1/2'
                     >
                       <Trash2 className='h-3 w-3' />

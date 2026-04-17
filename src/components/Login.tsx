@@ -84,11 +84,11 @@ function LoginPage() {
   return (
     <Card className='w-full max-w-sm m-auto'>
       <CardHeader>
-        <CardTitle>欢迎登录职业规划·智能体</CardTitle>
+        <CardTitle>欢迎登录 职业规划·智能体</CardTitle>
         <CardDescription>请在下方填入你的邮箱</CardDescription>
       </CardHeader>
       <CardContent>
-        <form>
+        <form onSubmit={(e) => e.preventDefault()}>
           <div className='flex flex-col gap-2'>
             邮箱：
             <div className='gap-2'>
@@ -109,6 +109,12 @@ function LoginPage() {
                   type='code'
                   value={code}
                   onChange={(e) => setCode(e.target.value.slice(0, 6))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
                   placeholder='请输入验证码'
                   required
                 />
@@ -129,7 +135,7 @@ function LoginPage() {
         </form>
       </CardContent>
       <CardFooter className='flex-col gap-2'>
-        <Button type='submit' className='w-full' onClick={login}>
+        <Button className='w-full' onClick={login}>
           {loading ? '登录中' : '登录/注册'}
         </Button>
       </CardFooter>
