@@ -70,6 +70,11 @@ export function AppSidebar() {
     await pinnedSession(id);
   };
 
+  const userQuit = () => {
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+  };
+
   return (
     <Sidebar collapsible='icon'>
       {/* 头部 - 新建对话按钮 */}
@@ -77,10 +82,14 @@ export function AppSidebar() {
         <div className='flex items-center gap-2 group-data-[collapsible=icon]:justify-center place-content-between'>
           <SidebarTrigger className='shrink-0 cursor-pointer' />
           <Button
+            className='w-auto justify-end gap-2 group-data-[collapsible=icon]:hidden'
+            onClick={userQuit}
+          >
+            退出登录
+          </Button>
+          <Button
             onClick={() => void handleNewChat()}
             className='w-auto justify-end gap-2 group-data-[collapsible=icon]:hidden'
-            variant='default'
-            size='sm'
           >
             <Plus className='h-4 w-4' />
             新对话
