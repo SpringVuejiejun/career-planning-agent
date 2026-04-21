@@ -72,6 +72,11 @@ export function AppSidebar() {
     await createSession();
   };
 
+  const handleOpenChat = (id: number) => {
+    setActiveSession(id);
+    navigate('/');
+  };
+
   const handleDeleteChat = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     await deleteSession(id);
@@ -219,7 +224,7 @@ export function AppSidebar() {
                       tooltip={chat.title}
                       size='lg'
                       isActive={activeSessionId === chat.id}
-                      onClick={() => setActiveSession(chat.id)}
+                      onClick={() => handleOpenChat(chat.id)}
                       className='group h-auto min-h-14 w-[90%] items-start justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
                     >
                       <div className='flex min-w-0 items-start gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>
@@ -276,7 +281,7 @@ export function AppSidebar() {
                       tooltip={chat.title}
                       size='lg'
                       isActive={activeSessionId === chat.id}
-                      onClick={() => setActiveSession(chat.id)}
+                      onClick={() => handleOpenChat(chat.id)}
                       className='group h-auto min-h-14 w-[90%] items-start justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
                     >
                       <div className='flex min-w-0 items-start gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>

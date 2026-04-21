@@ -40,23 +40,19 @@ type ChatStore = {
 
 const EMPTY_TITLE = '新对话';
 
+const isNewConversationSession = (session: ChatSession | null | undefined) => {
+  if (!session) return false;
+  const t = session.title?.trim() ?? '';
+  console.log(session.messages.length, '长度');
+  return session.messages.length === 1 && (t === '' || t === EMPTY_TITLE);
+};
+
 const getSessionTitle = (messages: StoredChatMessage[]) => {
   const firstUserMessage = messages.find((message) => message.role === 'user');
   const sourceText = firstUserMessage?.content?.trim();
   if (!sourceText) return EMPTY_TITLE;
   return sourceText.slice(0, 20);
 };
-
-// const createEmptySession = (): ChatSession => {
-//   const now = Date.now();
-//   return {
-//     id: -now,
-//     title: EMPTY_TITLE,
-//     messages: [],
-//     createdAt: now,
-//     updatedAt: now,
-//   };
-// };
 
 const sanitizeMessages = (messages: StoredChatMessage[]) =>
   messages.map((message) => ({
@@ -97,6 +93,14 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }));
   },
   createSession: async (title) => {
+    const { activeSessionId, sessions } = get();
+    if (activeSessionId) {
+      const current = sessions.find((s) => s.id === activeSessionId);
+      if (isNewConversationSession(current)) {
+        return current!.id;
+      }
+    }
+
     const created = await createConversation(title);
     const now = Date.now();
     const session: ChatSession = {

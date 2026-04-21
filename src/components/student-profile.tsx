@@ -195,7 +195,7 @@ export function StudentProfilePage() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 className='mt-2 min-h-[160px]'
-                placeholder='粘贴或输入你的经历与能力信息...'
+                placeholder='粘贴或输入你的经历与能力信息(至少10字)...'
                 disabled={loading}
               />
               <div className='mt-2 flex justify-end'>
@@ -282,7 +282,7 @@ export function StudentProfilePage() {
                     </span>
                     {Array.isArray(p.certificates)
                       ? p.certificates.slice(0, 8).join('、')
-                      : '—'}
+                      : '无'}
                   </div>
                 </div>
               ))}

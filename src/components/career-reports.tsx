@@ -190,7 +190,7 @@ export function CareerReportsPage() {
             <CardTitle className='text-lg'>职业生涯发展报告</CardTitle>
           </div>
           <CardDescription>
-            选择学生画像与目标岗位生成报告；支持编辑保存、智能润色、导出（纯文本/HTML）。
+            选择学生画像与目标岗位生成报告；支持编辑保存、智能润色、导出（纯文本/MD/HTML）。
           </CardDescription>
         </CardHeader>
 
