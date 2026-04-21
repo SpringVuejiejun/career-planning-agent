@@ -269,10 +269,11 @@
 - **新建对话**
   - 点击“新对话”按钮
   - store：`createSession()` → API `POST /api/chat/conversations`
+  - 增量优化：若当前 active 会话本身就是“新对话”（无消息，且标题为空/`新对话`），则复用当前会话，不再重复创建
   - 将新会话置顶并设为 active
 - **切换对话**
   - 点击某条会话
-  - store：`setActiveSession(id)`
+  - store：`setActiveSession(id)` 并跳转路由到 `/`（确保从任意功能页都能直接切回对话区并打开该会话）
   - 聊天区会触发加载该会话消息（见 3.4）
 - **删除对话**
   - 点击垃圾桶
@@ -412,3 +413,298 @@
   - MinIO：对象存储（Milvus 持久化依赖）
 
 ---
+
+## 6) 增量补充：岗位画像 / 学生能力画像 / 发展报告（三个页面全链路）
+
+> 说明：以下为新增功能的总结补充，原有章节内容保持不变。
+
+### 6.1 前端路由入口与页面挂载
+
+文件：`ai-interview-agent-frontend/src/App.tsx`
+
+- `/career/jobs`：`CareerJobs`（岗位画像 & 图谱）
+- `/career/profile`：`StudentProfilePage`（学生能力画像）
+- `/career/reports`：`CareerReportsPage`（职业生涯发展报告）
+- 三个路由均使用 `PrivateRoute`（依赖 `useAuth` → `GET /api/auth/me` 验证 token）
+
+侧边栏入口：
+
+- `src/components/app-sidebar.tsx` 中“功能”区：
+  - 岗位画像&图谱 → `navigate('/career/jobs')`
+  - 学生能力画像 → `navigate('/career/profile')`
+  - 发展报告 → `navigate('/career/reports')`
+
+### 6.2 前端 API 封装（统一带 token）
+
+文件：`ai-interview-agent-frontend/src/lib/career-api.ts`
+
+- 认证头：`getAuthHeaders()` 从 `localStorage.access_token` 取 token，组装 `Authorization: Bearer <token>`
+- JSON 请求：`jsonFetch<T>()` 统一设置 `Content-Type: application/json` 并附加 token；非 2xx 会读取文本错误并抛异常
+- 文件上传：`uploadResume()` 使用 `FormData`，仅附加 token（不显式设置 `Content-Type`，由浏览器生成 boundary）
+
+### 6.3 后端路由总览与鉴权（`/career`）
+
+文件：`career-planning-backend/app/routers/career.py`
+
+- 路由前缀：`/career`
+- 鉴权：全部接口依赖 `get_current_user`（Header：`Authorization: Bearer <token>`）
+- 数据表创建：`career-planning-backend/app/main.py` lifespan 内执行 `Base.metadata.create_all`，包含本节涉及的所有 career 表
+
+---
+
+## 6.4 岗位画像 & 图谱（页面：`/career/jobs`）
+
+### 6.4.1 前端页面交互（`CareerJobs`）
+
+文件：`ai-interview-agent-frontend/src/components/career-jobs.tsx`
+
+- 页面加载/切换筛选时刷新：
+  - `refresh()` 会先调用 `seedCareerData()`（`POST /api/career/seed`），再并行请求：
+    - `listJobs()`（`GET /api/career/jobs`）
+    - `getJobGraph(relationType?)`（`GET /api/career/graph?relation_type=...`）
+- 关系筛选：
+  - `relationType = all|vertical|transition`
+  - `all` 不传参；其他传 `relation_type`
+- UI 展示：
+  - 左侧按 `category` 分组展示岗位画像（名称/级别/简介/技能/证书）
+  - 右侧展示岗位关系列表（from → to + relation_type + title/rationale）
+- 错误处理：
+  - 捕获异常后展示 `error` 文案（来自后端返回文本或 HTTP status）
+
+### 6.4.2 后端接口与核心逻辑
+
+文件：`career-planning-backend/app/routers/career.py`
+
+- **POST `/career/seed`**
+  - 作用：确保岗位画像与关系图谱存在（MVP 允许普通用户触发）
+  - 内部：`ensure_seed_job_data(db)`
+- **GET `/career/jobs`**
+  - 可选 query：`category`
+  - 内部：先 `ensure_seed_job_data(db)`，再按 `(category asc nulls last, name asc)` 排序返回
+- **GET `/career/graph?relation_type=vertical|transition`**
+  - 内部：先 `ensure_seed_job_data(db)`
+  - 返回：`jobs` 全量 + `relations` 按类型过滤（不传则返回全部）
+
+文件：`career-planning-backend/app/services/career_service.py`
+
+- `ensure_seed_job_data(db)`：
+  - 若 `job_profiles` 已有数据则直接返回
+  - 否则一次性插入：
+    - >=10 条 `JobProfile`（覆盖技能/证书/通用能力/实习等字段）
+    - 关系图谱 `JobRelation`：
+      - `vertical`（垂直发展/晋升）
+      - `transition`（换岗路径，带 `requirements_gap` 的 JSON 提示）
+
+### 6.4.3 数据表（岗位画像/关系图谱）
+
+文件：`career-planning-backend/app/models/career.py`
+
+#### `job_profiles`
+
+- **id**：`BigInteger`，PK，index
+- **code**：`String(80)`，unique（`uq_job_profiles_code`），index（稳定标识）
+- **name**：`String(120)`，index
+- **category**：`String(120)`，nullable，index
+- **level**：`String(50)`，nullable，index
+- **description**：`Text`，nullable
+- **skills/certificates/competencies/internship/other_requirements**：`JSON`，nullable
+- **created_at/updated_at**：`DateTime(tz)`（`updated_at` onupdate）
+- **索引**：
+  - `idx_job_profiles_category_level (category, level)`
+
+#### `job_relations`
+
+- **id**：`BigInteger`，PK，index
+- **relation_type**：`String(30)`，index（`vertical|transition`）
+- **from_job_id/to_job_id**：FK → `job_profiles.id`（`ON DELETE CASCADE`）
+- **title**：`String(200)`，nullable
+- **rationale**：`Text`，nullable
+- **requirements_gap**：`JSON`，nullable
+- **created_at**：`DateTime(tz)`
+- **索引**：
+  - `idx_job_relations_type_from (relation_type, from_job_id)`
+  - `idx_job_relations_type_to (relation_type, to_job_id)`
+
+---
+
+## 6.5 学生能力画像（页面：`/career/profile`）
+
+### 6.5.1 前端页面交互（`StudentProfilePage`）
+
+文件：`ai-interview-agent-frontend/src/components/student-profile.tsx`
+
+- 页面启动加载历史：
+  - `listStudentProfiles()` → `GET /api/career/student-profiles`（按创建时间倒序，最多 50 条）
+- 生成画像（方式一：手动录入）：
+  - 文本 >=10 字才可提交
+  - `createStudentProfileManual(text)` → `POST /api/career/student-profiles/manual`
+- 生成画像（方式二：简历上传）：
+  - 支持 `txt/md/text/pdf/docx`
+  - 可选补充 `textHint`（例如城市/意向/额外信息）一起提交以提高提取质量
+  - `uploadResume(file, textHint?)` → `POST /api/career/student-profiles/resume`（multipart/form-data）
+- UI 展示：
+  - 右侧列表展示历史画像概览（来源、技能/证书摘要、完整度/竞争力评分）
+  - 对最新一条画像做“摘要聚合展示”（从 JSON 字段中抽取教育/技能/证书/项目/实习/通用素质/评分依据摘要）
+
+### 6.5.2 后端接口与核心逻辑
+
+文件：`career-planning-backend/app/routers/career.py`
+
+- **POST `/career/student-profiles/manual`**
+  - 请求体：`{ text: string(min_length=10) }`
+  - 内部：`build_student_profile_from_text(db, user_id, source_type="manual", source_text=text)`
+- **POST `/career/student-profiles/resume`**
+  - 表单：
+    - `file`（必填）
+    - `text_hint`（可选）
+  - 内部流程：
+    - `extract_text_from_upload(filename, content_type, raw)` 尝试提取文本（txt/pdf/docx）
+    - 合并：`merged = text_hint + extracted`
+    - 若 `merged` 长度 < 10：
+      - 返回 400
+      - 若 PDF 为扫描件无文本层，会附带提示“可能是扫描件图片版”
+    - 再调用 `build_student_profile_from_text(..., source_type="resume_upload", source_text=merged)`
+- **GET `/career/student-profiles`**
+  - 返回当前用户画像列表（倒序、limit 50）
+- **GET `/career/student-profiles/{profile_id}`**
+  - 只能读取自己的画像；不存在则 404
+
+文件：`career-planning-backend/app/services/career_service.py`
+
+- `build_student_profile_from_text(...)`：
+  - 使用 LLM（`create_llm(streaming=False)`）按固定字段输出 JSON：
+    - `skills/certificates/competencies/internship/projects/education/awards`
+    - `completeness_score/competitiveness_score/scoring_detail`
+  - 解析：`_safe_json_loads()` 兼容 ```json 包裹、截取第一个 `{...}` 块
+  - 兜底：若解析失败，仍会落库一份“空画像 + 默认分数 40”
+  - 入库后返回 `StudentCapabilityProfile`
+
+文件：`career-planning-backend/app/utils/resume_extract.py`
+
+- `extract_text_from_upload()`：
+  - txt：utf-8，失败再尝试 gbk
+  - pdf：优先 PyMuPDF，其次 pypdf；若无文本层返回 `pdf(no_text_layer)`
+  - docx：python-docx 读取段落与表格文本
+
+### 6.5.3 数据表（学生能力画像）
+
+文件：`career-planning-backend/app/models/career.py`
+
+#### `student_capability_profiles`
+
+- **id**：`BigInteger`，PK，index
+- **user_id**：`Integer`，FK → `users.id`（`ON DELETE CASCADE`），index
+- **source_type**：`String(30)`（`manual|resume_upload`）
+- **source_text**：`Text`（原始输入/提取文本，MVP 直接存）
+- **source_filename**：`String(260)`，nullable
+- **skills/certificates/competencies/internship/projects/education/awards**：`JSON`，nullable
+- **completeness_score/competitiveness_score**：`Integer`（0-100），nullable
+- **scoring_detail**：`JSON`，nullable
+- **created_at/updated_at**：`DateTime(tz)`
+- **索引**：
+  - `idx_student_profiles_user_created (user_id, created_at)`
+
+---
+
+## 6.6 职业生涯发展报告（页面：`/career/reports`）
+
+### 6.6.1 前端页面交互（`CareerReportsPage`）
+
+文件：`ai-interview-agent-frontend/src/components/career-reports.tsx`
+
+- 页面启动时统一加载所需数据：
+  - `listJobs()`（岗位下拉）
+  - `listStudentProfiles()`（画像下拉）
+  - `listReports()`（历史报告列表）
+  - 若未选择：默认选择第一条画像/岗位/报告作为 active
+- 生成报告：
+  - 选择画像 + 目标岗位 +（可选）意愿约束 intention
+  - `createReport(profileId, jobId, intention?)` → `POST /api/career/reports`
+  - 生成后 `refresh()` 并切换到新报告
+- 编辑保存：
+  - 编辑标题与 Markdown（实际上是“纯文本结构”，但存放在 `content_markdown` 字段）
+  - `updateReport(reportId, {title, content_markdown})` → `PUT /api/career/reports/{id}`
+- 智能润色：
+  - `polishReport(reportId)` → `POST /api/career/reports/{id}/polish`
+  - 返回的新内容直接覆盖编辑器内容
+- 导出：
+  - `exportReport(reportId, fmt=txt|md|html)` → `GET /api/career/reports/{id}/export?fmt=...`
+  - 前端将 `content` 生成 Blob 并触发下载（文件名使用当前编辑器标题）
+
+### 6.6.2 后端接口与核心逻辑
+
+文件：`career-planning-backend/app/routers/career.py`
+
+- **POST `/career/reports`**
+  - 请求体：`{ student_profile_id, target_job_id, intention? }`
+  - 内部：`ensure_seed_job_data(db)` → `build_report_for_student(...)`
+- **GET `/career/reports`**
+  - 返回当前用户报告列表（倒序、limit 50）
+- **GET `/career/reports/{report_id}`**
+  - 只能读取自己的报告；不存在则 404
+- **PUT `/career/reports/{report_id}`**
+  - patch：`{ title?, content_markdown?, status? }`
+  - status 仅允许 `draft|finalized`
+  - 更新 `updated_at = utcnow()` 后 commit
+- **POST `/career/reports/{report_id}/polish`**
+  - MVP：复用“导出/润色”逻辑，让 LLM 对现有报告做语言优化与完整性检查
+- **GET `/career/reports/{report_id}/export?fmt=txt|md|html`**
+  - `txt`：返回“纯文本结构”（去掉 Markdown 符号）
+  - `md`：把“纯文本结构”转换为 Markdown 标题层级
+  - `html`：用 `<pre>` 包裹并做简单转义
+  - 同时写入 `ReportExportArtifact`（记录导出格式/内容/生成时间）
+
+文件：`career-planning-backend/app/services/career_service.py`
+
+- `build_report_for_student(...)`：
+  - 读取并校验：
+    - `StudentCapabilityProfile` 必须属于当前用户，否则报错
+    - `JobProfile` 必须存在
+  - `match = _score_match(student, job)`：
+    - 专业技能：按 `skills` 交集比例打分
+    - 通用素质：按 `competencies` 关键字段是否存在粗估
+    - 综合：\(overall = 0.6 * skill\_match + 0.4 * comp\_match\)
+    - 输出 notes（重叠/缺失技能列表）
+  - LLM 生成报告：
+    - 强约束输出为“纯文本结构”，禁止 Markdown 符号
+    - 必须包含“一、二、三、四”四章（匹配/路径/行动计划/完整性检查）
+    - 对未知信息以“需补充：...”标注，避免胡编
+  - 入库：`CareerDevelopmentReport`（`content_markdown` 存“纯文本结构”）
+- `to_markdown_export(content_markdown, mode)`：
+  - `markdown`：用于 `txt` 导出（返回纯文本结构）
+  - `md`：将“标题：...”与“一、二、三...”转换为 Markdown `# / ##`（用于 md 导出）
+  - `html`：转义后 `<pre>` 包裹（用于 html 导出）
+  - `polish`：LLM 对原报告润色，仍输出纯文本结构
+
+### 6.6.3 数据表（报告与导出产物）
+
+文件：`career-planning-backend/app/models/career.py`
+
+#### `career_development_reports`
+
+- **id**：`BigInteger`，PK，index
+- **user_id**：`Integer`，FK → `users.id`（`ON DELETE CASCADE`），index
+- **student_profile_id**：FK → `student_capability_profiles.id`（`ON DELETE SET NULL`），index
+- **target_job_id**：FK → `job_profiles.id`（`ON DELETE SET NULL`），index
+- **title**：`String(200)`，default `职业生涯发展报告`
+- **status**：`String(30)`，default `draft`（`draft|finalized`）
+- **content_markdown**：`Text`（实际存“纯文本结构报告”，编辑/润色/导出均以此为准）
+- **content_json**：`JSON`，nullable（预留结构化段落）
+- **match_summary**：`JSON`，nullable（各维度匹配度/差距）
+- **overall_match_score**：`Integer`，nullable（0-100）
+- **action_plan**：`JSON`，nullable（预留行动计划结构化）
+- **created_at/updated_at**：`DateTime(tz)`
+- **索引**：
+  - `idx_reports_user_created (user_id, created_at)`
+  - `idx_reports_profile_job (student_profile_id, target_job_id)`
+
+#### `report_export_artifacts`
+
+- **id**：`BigInteger`，PK，index
+- **report_id**：`BigInteger`，FK → `career_development_reports.id`（`ON DELETE CASCADE`）
+- **export_format**：`String(30)`（`txt|md|html`）
+- **artifact_text**：`Text`（MVP：直接保存导出文本）
+- **artifact_meta**：`JSON`（例如 `generated_at`）
+- **created_at**：`DateTime(tz)`
+- **索引**：
+  - `idx_export_report_created (report_id, created_at)`
