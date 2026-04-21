@@ -12,12 +12,24 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { MessageSquare, Plus, Clock, Pin, Trash2 } from 'lucide-react';
+import {
+  MessageSquare,
+  Plus,
+  Clock,
+  Pin,
+  Trash2,
+  Network,
+  UserRoundCheck,
+  FileText,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEffect, useMemo } from 'react';
 import { useChatStore } from '@/stores/chatStore';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export function AppSidebar() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const {
     sessions,
     activeSessionId,
@@ -41,13 +53,13 @@ export function AppSidebar() {
         const lastMessage =
           session.messages[session.messages.length - 1]?.content ??
           '点击继续该会话';
-        const timestamp = new Date(session.updatedAt).toLocaleDateString(
-          'zh-CN',
-          {
-            month: 'numeric',
-            day: 'numeric',
-          }
-        );
+        const timestamp = new Date(session.updatedAt).toLocaleString('zh-CN', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
         return { ...session, lastMessage, timestamp };
       }),
     [sessions]
@@ -99,6 +111,99 @@ export function AppSidebar() {
 
       {/* 内容 - 聊天历史列表 */}
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>功能</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip='对话'
+                  size='lg'
+                  isActive={location.pathname === '/'}
+                  onClick={() => navigate('/')}
+                  className='group h-auto min-h-12 w-full items-center justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
+                >
+                  <div className='flex min-w-0 items-center gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>
+                    <MessageSquare className='h-4 w-4 shrink-0' />
+                    <div className='min-w-0 flex-1 overflow-hidden group-data-[collapsible=icon]:hidden'>
+                      <div className='truncate text-sm font-medium'>对话</div>
+                      <div className='truncate text-xs text-muted-foreground'>
+                        职业规划聊天
+                      </div>
+                    </div>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip='岗位画像&图谱'
+                  size='lg'
+                  isActive={location.pathname === '/career/jobs'}
+                  onClick={() => navigate('/career/jobs')}
+                  className='group h-auto min-h-12 w-full items-center justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
+                >
+                  <div className='flex min-w-0 items-center gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>
+                    <Network className='h-4 w-4 shrink-0' />
+                    <div className='min-w-0 flex-1 overflow-hidden group-data-[collapsible=icon]:hidden'>
+                      <div className='truncate text-sm font-medium'>
+                        岗位画像&图谱
+                      </div>
+                      <div className='truncate text-xs text-muted-foreground'>
+                        晋升/换岗路径
+                      </div>
+                    </div>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip='学生能力画像'
+                  size='lg'
+                  isActive={location.pathname === '/career/profile'}
+                  onClick={() => navigate('/career/profile')}
+                  className='group h-auto min-h-12 w-full items-center justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
+                >
+                  <div className='flex min-w-0 items-center gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>
+                    <UserRoundCheck className='h-4 w-4 shrink-0' />
+                    <div className='min-w-0 flex-1 overflow-hidden group-data-[collapsible=icon]:hidden'>
+                      <div className='truncate text-sm font-medium'>
+                        学生能力画像
+                      </div>
+                      <div className='truncate text-xs text-muted-foreground'>
+                        简历解析与评分
+                      </div>
+                    </div>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip='发展报告'
+                  size='lg'
+                  isActive={location.pathname === '/career/reports'}
+                  onClick={() => navigate('/career/reports')}
+                  className='group h-auto min-h-12 w-full items-center justify-between py-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2'
+                >
+                  <div className='flex min-w-0 items-center gap-2 overflow-hidden group-data-[collapsible=icon]:items-center'>
+                    <FileText className='h-4 w-4 shrink-0' />
+                    <div className='min-w-0 flex-1 overflow-hidden group-data-[collapsible=icon]:hidden'>
+                      <div className='truncate text-sm font-medium'>
+                        发展报告
+                      </div>
+                      <div className='truncate text-xs text-muted-foreground'>
+                        生成/编辑/导出
+                      </div>
+                    </div>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* 置顶对话 */}
         {pinnedChats.length > 0 && (
           <SidebarGroup>
