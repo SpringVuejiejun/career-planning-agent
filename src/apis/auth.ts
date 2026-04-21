@@ -12,7 +12,7 @@ export interface LoginParams {
 
 export interface TokenResponse {
     access_token: string,
-    is_new_user: string,
+    is_new_user: boolean,
     expires_in: number,
     token_type: string
 }
