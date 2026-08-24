@@ -10,6 +10,7 @@ const config = {
 
 const request = axios.create(config)
 
+// 请求拦截器
 request.interceptors.request.use(
     config => {
         const token = localStorage.getItem('access_token')
@@ -23,7 +24,7 @@ request.interceptors.request.use(
     }
 )
 
-
+// 响应拦截器
 request.interceptors.response.use(
     response => {
         return response.data

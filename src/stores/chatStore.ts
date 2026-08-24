@@ -93,6 +93,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }));
   },
   createSession: async (title) => {
+    // 创建新对话之前检查当前活跃对话是否是刚创建的新对话，防止创建多个新对话
     const { activeSessionId, sessions } = get();
     if (activeSessionId) {
       const current = sessions.find((s) => s.id === activeSessionId);
@@ -101,6 +102,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       }
     }
 
+    // 正式创建新对话
     const created = await createConversation(title);
     const now = Date.now();
     const session: ChatSession = {
@@ -114,6 +116,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         ? new Date(created.last_message_at).getTime()
         : now,
     };
+    // 将新对话添加到会话列表中，并设置为活跃对话
     set((state) => ({
       sessions: [session, ...state.sessions.filter((s) => s.id !== session.id)],
       activeSessionId: session.id,
@@ -121,6 +124,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     return session.id;
   },
   setActiveSession: (id) => {
+    // 设置活跃对话
     set((state) => {
       const sessionExists = state.sessions.some((session) => session.id === id);
       if (!sessionExists) return state;
